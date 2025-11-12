@@ -1,0 +1,59 @@
+# Application configuration (adapted for MySQL / XAMPP)
+spring:
+  application:
+    name: biblioteca
+
+  # DataSource (HikariCP) - XAMPP MySQL defaults: user 'root' and no password by default
+  datasource:
+    # Mantuvimos el nombre de la base de datos 'biblioteca_db' tal como pediste,
+    # y añadimos parámetros recomendados para evitar problemas de conexión con MySQL
+    # en entornos locales y con versiones recientes del driver.
+    url: jdbc:mysql://localhost:3306/biblioteca_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: '' # XAMPP default often has empty password for root; change for your setup
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # JPA / Hibernate
+  jpa:
+    hibernate:
+      ddl-auto: update # use 'validate' or 'none' in production
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  # Jackson (JSON) settings
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+    property-naming-strategy: SNAKE_CASE
+    time-zone: UTC
+
+  # Spring Boot DevTools (development only)
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+
+# Embedded server configuration (Tomcat)
+server:
+  port: 8080
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 10
+    accept-count: 100
+    connection-timeout: 20000
+    uri-encoding: UTF-8
+
+# Optional: application-specific settings
+application:
+  name: biblioteca
