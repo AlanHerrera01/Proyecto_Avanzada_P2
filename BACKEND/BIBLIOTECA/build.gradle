@@ -30,9 +30,6 @@ dependencies {
     // H2 para pruebas en memoria
     testImplementation 'com.h2database:h2'
 
-    // Dependencias de test de Spring Boot
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-
     runtimeOnly('com.h2database:h2')
 }
 
