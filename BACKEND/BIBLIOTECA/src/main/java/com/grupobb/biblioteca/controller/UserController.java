@@ -7,6 +7,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+
+/**
+ * Controlador REST para gestionar usuarios.
+ *
+ * Endpoints:
+ * - GET /api/users       -> lista todos los usuarios
+ * - GET /api/users/{id}  -> obtiene un usuario por id
+ * - POST /api/users      -> crea un usuario
+ * - PUT /api/users/{id}  -> actualiza un usuario
+ * - DELETE /api/users/{id} -> elimina un usuario
+ */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -19,7 +30,7 @@ public class UserController {
 
     @GetMapping
     public List<User> list() {
-        return userService.getAllUsers(); // Si no existe, crea este método en UserService
+        return userService.getAllUsers();
     }
 
     @GetMapping("/{id}")
