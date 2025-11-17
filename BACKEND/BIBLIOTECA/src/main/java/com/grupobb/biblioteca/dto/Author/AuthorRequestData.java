@@ -9,7 +9,7 @@ public class AuthorRequestData {
 
     // Nacionalidad opcional aunque se puede validar si es necesario
     private String nacionalidad;
-    //siempre debe tener constructor vacío
+    //siempre
     public String getNombre() {
         return nombre;
     }
