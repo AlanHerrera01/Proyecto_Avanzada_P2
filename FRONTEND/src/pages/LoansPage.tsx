@@ -182,31 +182,31 @@ export const LoansPage: React.FC = () => {
                     <td>
                       <span className="fw-bold text-primary">#{loan.id}</span>
                     </td>
-                    <td className="fw-semibold">{loan.usuarioNombre}</td>
-                    <td className="text-secondary">{loan.libroTitulo}</td>
+                    <td className="fw-semibold">{loan.usuario_nombre}</td>
+                    <td className="text-secondary">{loan.libro_titulo}</td>
                     <td className="text-secondary small">
-                      {formatDate(loan.fechaPrestamo)}
+                      {formatDate(loan.fecha_prestamo)}
                     </td>
                     <td className="text-secondary small">
-                      {loan.fechaDevolucion
-                        ? formatDate(loan.fechaDevolucion)
+                      {loan.fecha_devolucion
+                        ? formatDate(loan.fecha_devolucion)
                         : "-"}
                     </td>
 
                     <td>
                       <span
                         className={`badge rounded-pill px-3 py-2 fw-bold ${
-                          loan.fechaDevolucion
+                          loan.fecha_devolucion
                             ? "bg-secondary bg-opacity-75"
                             : "bg-warning bg-opacity-75"
                         }`}
                       >
-                        {loan.fechaDevolucion ? "Devuelto" : "Activo"}
+                        {loan.fecha_devolucion ? "Devuelto" : "Activo"}
                       </span>
                     </td>
 
                     <td>
-                      {!loan.fechaDevolucion && (
+                      {!loan.fecha_devolucion && (
                         <Button
                           size="sm"
                           variant="success"

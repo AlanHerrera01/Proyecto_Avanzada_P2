@@ -40,11 +40,12 @@ export interface BookFormData {
 // Tipos para Préstamos
 export interface Loan {
   id: number;
-  usuarioNombre: string;
-  libroTitulo: string;
-  fechaPrestamo: string;
-  fechaDevolucion?: string | null;
+  usuario_nombre: string;
+  libro_titulo: string;
+  fecha_prestamo: string;
+  fecha_devolucion?: string | null;
 }
+
 
 export interface LoanFormData {
   usuarioId: number;
