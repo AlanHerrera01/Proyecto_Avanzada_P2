@@ -58,3 +58,6 @@ server:
 # Optional: application-specific settings
 application:
   name: biblioteca
+
+app:
+  version: @project.version@
