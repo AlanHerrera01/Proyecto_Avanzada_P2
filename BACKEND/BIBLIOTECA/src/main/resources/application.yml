@@ -3,6 +3,7 @@ spring:
   application:
     name: biblioteca
 #yo
+  #t
   # DataSource (HikariCP) - XAMPP MySQL defaults: user 'root' and no password by default
   datasource:
     # Mantuvimos el nombre de la base de datos 'biblioteca_db' tal como pediste,
