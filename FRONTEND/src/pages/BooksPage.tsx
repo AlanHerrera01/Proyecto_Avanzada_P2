@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
-import { Card } from '../components/ui/Card';
+import { Plus, Edit2, Trash2, BookOpen } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
-import { Table } from '../components/ui/Table';
 import { bookService } from '../services/bookService';
 import { authorService } from '../services/authorService';
 import type { Book, BookFormData, Author } from '../types';
@@ -96,105 +94,113 @@ export const BooksPage: React.FC = () => {
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Libros</h1>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} className="mr-2" />
-          Nuevo Libro
-        </Button>
-      </div>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+    <div className="bg-light min-vh-100 py-5">
+      <div className="container">
+        <div className="bg-white rounded-4 shadow-sm px-4 py-4 mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-md-between">
+          <div>
+            <h1 className="display-4 fw-bold mb-1" style={{ color: '#1565c0', letterSpacing: '-1px' }}>Catálogo de Libros</h1>
+            <p className="text-secondary mb-0" style={{ fontSize: '1.1rem' }}>Explora y administra tu colección literaria</p>
+          </div>
+          <Button 
+            onClick={() => setIsModalOpen(true)} 
+            className="btn btn-primary d-flex align-items-center px-4 py-2 fs-5 shadow-sm"
+            style={{ minWidth: 160 }}
+          >
+            <Plus size={22} className="me-2" />
+            Nuevo Libro
+          </Button>
         </div>
-      )}
 
-      <Card>
+        {error && (
+          <div className="alert alert-danger d-flex align-items-center gap-2 mb-4" role="alert">
+            <svg className="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Error:"><use xlinkHref="#exclamation-triangle-fill" /></svg>
+            <span>{error}</span>
+          </div>
+        )}
+
         {loading && books.length === 0 ? (
-          <div className="text-center py-8">Cargando...</div>
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Cargando...</span>
+            </div>
+            <p className="mt-3 text-secondary fw-semibold">Cargando libros...</p>
+          </div>
         ) : books.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No hay libros registrados
+          <div className="text-center py-5">
+            <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{width: '80px', height: '80px'}}>
+              <BookOpen size={40} className="text-primary" />
+            </div>
+            <p className="text-secondary fs-5 fw-semibold">No hay libros registrados</p>
+            <p className="text-muted">Comienza agregando tu primer libro</p>
           </div>
         ) : (
-          <Table headers={['ID', 'Título', 'Autor', 'Disponible', 'Acciones']}>
+          <div className="row g-4">
             {books.map((book) => (
-              <tr key={book.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {book.id}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {book.titulo}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {book.autorNombre}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    book.disponible 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {book.disponible ? 'Disponible' : 'Prestado'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleEdit(book)}
-                  >
-                    <Edit2 size={16} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => handleDelete(book.id)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                </td>
-              </tr>
+              <div key={book.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
+                <div className="card h-100 shadow-sm">
+                  <div className="card-header bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style={{height: '90px'}}>
+                    <BookOpen size={40} className="text-primary opacity-50" />
+                  </div>
+                  <div className="card-body d-flex flex-column justify-content-between">
+                    <div>
+                      <h5 className="card-title fw-bold text-dark mb-1 text-truncate">{book.titulo}</h5>
+                      <p className="card-text text-secondary mb-2 text-truncate">{book.autorNombre}</p>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center mt-2">
+                      <span className={`badge rounded-pill px-3 py-2 fw-bold ${book.disponible ? 'bg-success bg-opacity-75' : 'bg-danger bg-opacity-75'}`}>{book.disponible ? '✓ Disponible' : '✗ Prestado'}</span>
+                      <div className="d-flex gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => handleEdit(book)}>
+                          <Edit2 size={16} />
+                        </Button>
+                        <Button size="sm" variant="danger" onClick={() => handleDelete(book.id)}>
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ))}
-          </Table>
-        )}
-      </Card>
-
-      <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        title={editingBook ? 'Editar Libro' : 'Nuevo Libro'}
-      >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <Input
-            label="Título"
-            {...register('titulo', { 
-              required: 'El título es obligatorio',
-            })}
-            error={errors.titulo?.message}
-          />
-
-          <Select
-            label="Autor"
-            {...register('autorId', { 
-              required: 'El autor es obligatorio',
-            })}
-            options={authors.map(a => ({ value: a.id, label: a.nombre }))}
-            error={errors.autorId?.message}
-          />
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="secondary" onClick={handleCloseModal}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Guardando...' : 'Guardar'}
-            </Button>
           </div>
-        </form>
-      </Modal>
+        )}
+
+        <Modal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title={editingBook ? 'Editar Libro' : 'Nuevo Libro'}
+        >
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="mb-3">
+              <Input
+                label="Título del Libro"
+                placeholder="Ingresa el título completo"
+                {...register('titulo', { 
+                  required: 'El título es obligatorio',
+                })}
+                error={errors.titulo?.message}
+              />
+            </div>
+            <div className="mb-3">
+              <Select
+                label="Autor"
+                {...register('autorId', { 
+                  required: 'El autor es obligatorio',
+                })}
+                options={authors.map(a => ({ value: a.id, label: a.nombre }))}
+                error={errors.autorId?.message}
+              />
+            </div>
+            <div className="d-flex justify-content-end gap-2 pt-3 border-top">
+              <Button type="button" variant="secondary" onClick={handleCloseModal}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? 'Guardando...' : editingBook ? 'Actualizar' : 'Crear Libro'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      </div>
     </div>
   );
 };

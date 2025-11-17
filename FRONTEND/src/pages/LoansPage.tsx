@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Plus, RotateCcw } from 'lucide-react';
-import { Card } from '../components/ui/Card';
+import { Plus, RotateCcw, FileText } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
-import { Table } from '../components/ui/Table';
 import { loanService } from '../services/loanService';
 import { userService } from '../services/userService';
 import { bookService } from '../services/bookService';
@@ -52,7 +50,7 @@ export const LoansPage: React.FC = () => {
   const loadBooks = async () => {
     try {
       const data = await bookService.getAll();
-      setBooks(data.filter(b => b.disponible)); // Solo libros disponibles
+      setBooks(data.filter(b => b.disponible));
     } catch (err) {
       console.error('Error al cargar libros');
     }
@@ -67,7 +65,7 @@ export const LoansPage: React.FC = () => {
       };
       await loanService.create(formData);
       await loadLoans();
-      await loadBooks(); // Recargar libros para actualizar disponibilidad
+      await loadBooks();
       handleCloseModal();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al crear préstamo');
@@ -78,12 +76,11 @@ export const LoansPage: React.FC = () => {
 
   const handleReturn = async (id: number) => {
     if (!confirm('¿Confirmar devolución del libro?')) return;
-    
     try {
       setLoading(true);
       await loanService.returnBook(id);
       await loadLoans();
-      await loadBooks(); // Recargar libros para actualizar disponibilidad
+      await loadBooks();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al devolver libro');
     } finally {
@@ -101,114 +98,132 @@ export const LoansPage: React.FC = () => {
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} className="mr-2" />
-          Nuevo Préstamo
-        </Button>
-      </div>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+    <div className="bg-light min-vh-100 py-5">
+      <div className="container">
+        <div className="bg-white rounded-4 shadow-sm px-4 py-4 mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-md-between">
+          <div>
+            <h1 className="display-4 fw-bold mb-1" style={{ color: '#1565c0', letterSpacing: '-1px' }}>Control de Préstamos</h1>
+            <p className="text-secondary mb-0" style={{ fontSize: '1.1rem' }}>Gestiona los préstamos y devoluciones de libros</p>
+          </div>
+          <Button 
+            onClick={() => setIsModalOpen(true)} 
+            className="btn btn-primary d-flex align-items-center px-4 py-2 fs-5 shadow-sm"
+            style={{ minWidth: 180 }}
+          >
+            <Plus size={22} className="me-2" />
+            Nuevo Préstamo
+          </Button>
         </div>
-      )}
 
-      <Card>
+        {error && (
+          <div className="alert alert-danger d-flex align-items-center gap-2 mb-4" role="alert">
+            <svg className="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Error:"><use xlinkHref="#exclamation-triangle-fill" /></svg>
+            <span>{error}</span>
+          </div>
+        )}
+
         {loading && loans.length === 0 ? (
-          <div className="text-center py-8">Cargando...</div>
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Cargando...</span>
+            </div>
+            <p className="mt-3 text-secondary fw-semibold">Cargando préstamos...</p>
+          </div>
         ) : loans.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No hay préstamos registrados
+          <div className="text-center py-5">
+            <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{width: '80px', height: '80px'}}>
+              <FileText size={40} className="text-primary" />
+            </div>
+            <p className="text-secondary fs-5 fw-semibold">No hay préstamos registrados</p>
+            <p className="text-muted">Comienza registrando tu primer préstamo</p>
           </div>
         ) : (
-          <Table headers={['ID', 'Usuario', 'Libro', 'Fecha Préstamo', 'Fecha Devolución', 'Estado', 'Acciones']}>
-            {loans.map((loan) => (
-              <tr key={loan.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {loan.id}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {loan.usuarioNombre}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {loan.libroTitulo}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatDate(loan.fechaPrestamo)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {loan.fechaDevolucion ? formatDate(loan.fechaDevolucion) : '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    loan.fechaDevolucion 
-                      ? 'bg-gray-100 text-gray-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {loan.fechaDevolucion ? 'Devuelto' : 'Activo'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {!loan.fechaDevolucion && (
-                    <Button
-                      size="sm"
-                      variant="success"
-                      onClick={() => handleReturn(loan.id)}
-                    >
-                      <RotateCcw size={16} className="mr-1" />
-                      Devolver
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Card>
-
-      <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        title="Nuevo Préstamo"
-      >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <Select
-            label="Usuario"
-            {...register('usuarioId', { 
-              required: 'El usuario es obligatorio',
-            })}
-            options={users.map(u => ({ value: u.id, label: `${u.nombre} (${u.email})` }))}
-            error={errors.usuarioId?.message}
-          />
-
-          <Select
-            label="Libro"
-            {...register('libroId', { 
-              required: 'El libro es obligatorio',
-            })}
-            options={books.map(b => ({ value: b.id, label: b.titulo }))}
-            error={errors.libroId?.message}
-          />
-
-          {books.length === 0 && (
-            <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
-              No hay libros disponibles para préstamo
-            </div>
-          )}
-
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="secondary" onClick={handleCloseModal}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading || books.length === 0}>
-              {loading ? 'Guardando...' : 'Guardar'}
-            </Button>
+          <div className="table-responsive rounded-3 shadow-sm border bg-white">
+            <table className="table align-middle mb-0">
+              <thead className="table-primary">
+                <tr>
+                  <th scope="col">ID</th>
+                  <th scope="col">Usuario</th>
+                  <th scope="col">Libro</th>
+                  <th scope="col">Fecha Préstamo</th>
+                  <th scope="col">Fecha Devolución</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loans.map((loan) => (
+                  <tr key={loan.id}>
+                    <td><span className="fw-bold text-primary">#{loan.id}</span></td>
+                    <td><span className="fw-semibold text-dark">{loan.usuarioNombre}</span></td>
+                    <td className="text-secondary">{loan.libroTitulo}</td>
+                    <td className="text-secondary small">{formatDate(loan.fechaPrestamo)}</td>
+                    <td className="text-secondary small">{loan.fechaDevolucion ? formatDate(loan.fechaDevolucion) : '-'}</td>
+                    <td>
+                      <span className={`badge rounded-pill px-3 py-2 fw-bold ${loan.fechaDevolucion ? 'bg-secondary bg-opacity-75' : 'bg-warning bg-opacity-75'}`}>{loan.fechaDevolucion ? '✓ Devuelto' : '⏱ Activo'}</span>
+                    </td>
+                    <td>
+                      {!loan.fechaDevolucion && (
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => handleReturn(loan.id)}
+                        >
+                          <RotateCcw size={16} className="me-1" />
+                          Devolver
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </form>
-      </Modal>
+        )}
+
+        <Modal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title="Nuevo Préstamo"
+        >
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="mb-3">
+              <Select
+                label="Usuario"
+                {...register('usuarioId', { 
+                  required: 'El usuario es obligatorio',
+                })}
+                options={users.map(u => ({ value: u.id, label: `${u.nombre} (${u.email})` }))}
+                error={errors.usuarioId?.message}
+              />
+            </div>
+            <div className="mb-3">
+              <Select
+                label="Libro"
+                {...register('libroId', { 
+                  required: 'El libro es obligatorio',
+                })}
+                options={books.map(b => ({ value: b.id, label: b.titulo }))}
+                error={errors.libroId?.message}
+              />
+            </div>
+            {books.length === 0 && (
+              <div className="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                <svg className="bi flex-shrink-0 me-2" width="24" height="24" role="img" aria-label="Advertencia:"><use xlinkHref="#exclamation-triangle-fill" /></svg>
+                <span>No hay libros disponibles para préstamo</span>
+              </div>
+            )}
+            <div className="d-flex justify-content-end gap-2 pt-3 border-top">
+              <Button type="button" variant="secondary" onClick={handleCloseModal}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={loading || books.length === 0}>
+                {loading ? 'Guardando...' : 'Registrar Préstamo'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      </div>
     </div>
   );
 };

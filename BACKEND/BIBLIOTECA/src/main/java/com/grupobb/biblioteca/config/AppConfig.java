@@ -15,14 +15,12 @@ public class AppConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
                         .allowedOrigins(
-                            "http://localhost:5173",  // Frontend local
-                            "http://localhost:3000",   // Alternativo local
-                            "https://proyecto-avanzada-p1.onrender.com", // Backend Render
-                            "*" // Permitir cualquier origen (para desarrollo)
+                            "http://localhost:5173",
+                            "http://localhost:3000",
+                            "https://proyecto-avanzada-p1.onrender.com"
                         )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("*")
-                        .allowCredentials(true);
+                        .allowedHeaders("*");
             }
         };
     }
