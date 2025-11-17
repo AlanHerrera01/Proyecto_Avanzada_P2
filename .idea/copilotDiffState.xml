@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/.github/workflows/ci.yml">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/.github/workflows/ci.yml" />
+              <option name="originalContent" value="# yaml&#10;name: CI - Build and Test&#10;on:&#10;  push:&#10;    branches:&#10;      - main&#10;    paths:&#10;      - 'BACKEND/BIBLIOTECA/**'&#10;  pull_request:&#10;    branches:&#10;      - main&#10;    paths:&#10;      - 'BACKEND/BIBLIOTECA/**'&#10;&#10;defaults:&#10;  run:&#10;    working-directory: BACKEND/BIBLIOTECA&#10;&#10;&#10;jobs:&#10;  build:&#10;    runs-on: ubuntu-latest&#10;    steps:&#10;      - name: Checkout repository&#10;        uses: actions/checkout@v4&#10;&#10;      - name: Setup JDK 17&#10;        uses: actions/setup-java@v4&#10;        with:&#10;          distribution: 'temurin'&#10;          java-version: '17'&#10;&#10;      - name: Grant execute permission for Gradle&#10;        run: chmod +x ./gradlew&#10;&#10;      - name: Set project version&#10;        run: sed -i &quot;s/^version = '.*'$/version = '0.0.1.${{ github.run_number }}'/&quot; build.gradle&#10;&#10;      - name: Build with Gradle&#10;        run: ./gradlew clean build&#10;&#10;      - name: Run tests&#10;        run: ./gradlew test" />
+              <option name="updatedContent" value="# yaml&#10;name: CI - Build and Test&#10;on:&#10;  push:&#10;    branches:&#10;      - main&#10;    paths:&#10;      - 'BACKEND/BIBLIOTECA/**'&#10;  pull_request:&#10;    branches:&#10;      - main&#10;    paths:&#10;      - 'BACKEND/BIBLIOTECA/**'&#10;&#10;defaults:&#10;  run:&#10;    working-directory: BACKEND/BIBLIOTECA&#10;&#10;jobs:&#10;  build:&#10;    runs-on: ubuntu-latest&#10;    steps:&#10;      - name: Checkout repository&#10;        uses: actions/checkout@v4&#10;&#10;      - name: Setup JDK 17&#10;        uses: actions/setup-java@v4&#10;        with:&#10;          distribution: 'temurin'&#10;          java-version: '17'&#10;&#10;      - name: Grant execute permission for Gradle&#10;        run: chmod +x ./gradlew&#10;&#10;      - name: Set project version&#10;        run: sed -i &quot;s/^version = '.*'$/version = '0.0.1.${{ github.run_number }}'/&quot; build.gradle&#10;&#10;      - name: Build with Gradle&#10;        run: ./gradlew clean build&#10;&#10;      - name: Run tests&#10;        run: ./gradlew test" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

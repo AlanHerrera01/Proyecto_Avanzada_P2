@@ -10,27 +10,31 @@ jobs:
       - name: Buscar último despliegue exitoso y revertir
         run: |
           echo "Buscando el último despliegue exitoso..."
-
+          
           # Listar los despliegues para encontrar el último con estado 'live'
           deploys=$(curl --request GET \
             --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys?limit=20" \
             --header "Accept: application/json" \
-            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}") || true
-
-          # Usar 'jq' para parsear el JSON y encontrar el commit ID del último despliegue exitoso
-          successful_commit_id=$(echo "$deploys" | jq -r '.[] | select(.deploy.status == "live") | .deploy.commit.id' | head -n 1) || true
-
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
+          
+          # Usar la herramienta 'jq' para parsear el JSON y encontrar el commit ID del último despliegue exitoso
+          # Nota: Render a veces devuelve despliegues 'live' que son antiguos. Buscamos el más reciente.
+          successful_commit_id=$(echo "$deploys" | jq -r '.[] | select(.deploy.status == "live") | .deploy.commit.id' | head -n 1)
+          
           if [ -z "$successful_commit_id" ]; then
             echo "Error: No se encontró un despliegue previo exitoso para revertir."
             exit 1
           fi
-
+          
           echo "Se encontró el commit exitoso: $successful_commit_id. Iniciando rollback..."
-
+          
           # Crear un nuevo despliegue usando el commit ID del último despliegue exitoso
           curl --request POST \
             --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
             --header "Accept: application/json" \
             --header "Content-Type: application/json" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            --data '{"commitId": "'"$successful_commit_id"'"}' || true
+            --data '{
+              "commitId": "'"$successful_commit_id"'"
+            }'
+

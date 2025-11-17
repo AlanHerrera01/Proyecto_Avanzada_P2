@@ -3,198 +3,85 @@ name: CD - Despliegue en Render
 on:
   workflow_run:
     workflows: ["CI - Build and Test"]
-    types: [completed]
-  push:
-    branches: [main]
-    paths: ['BACKEND/BIBLIOTECA/**']
-  workflow_dispatch: {}
+    types:
+      - completed
+
+# Control de concurrencia para evitar despliegues simultáneos
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
-    if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-      || github.event_name == 'push'
-      || github.event_name == 'workflow_dispatch'
+      actions: write # Necesario para disparar el rollback
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Debug workflow files
-        run: |
-          echo "Verificando archivos de workflow en el runner..."
-          ls -la .github/workflows
-
-      - name: Debug event
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Event payload summary:"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "workflow_run.name=${{ github.event.workflow_run.name }}"
-            echo "workflow_run.conclusion=${{ github.event.workflow_run.conclusion }}"
-          else
-            echo "push.ref=${{ github.ref }}"
-            echo "push.sha=${{ github.sha }}"
-          fi
-
-      - name: Verify required secrets
-        run: |
-          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
-            echo "Error: secret RENDER_API_KEY no está definido." >&2
-            exit 1
-          fi
-          if [ -z "${{ secrets.RENDER_SERVICE_ID }}" ]; then
-            echo "Error: secret RENDER_SERVICE_ID no está definido." >&2
-            exit 1
-          fi
-
-      - name: Check Dockerfile exists in BACKEND/BIBLIOTECA
-        run: |
-          if [ ! -f "BACKEND/BIBLIOTECA/Dockerfile" ]; then
-            echo "Advertencia: no se encontró BACKEND/BIBLIOTECA/Dockerfile en el repositorio." >&2
-          else
-            echo "Se encontró BACKEND/BIBLIOTECA/Dockerfile. OK."
-          fi
-
       - name: Desplegar en Render y verificar estado
         id: deploy
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
-          set -euo pipefail
-          echo "Iniciando despliegue en Render..."
+          echo "Paso 1: Intentando iniciar el despliegue en Render..."
+          # Iniciar el despliegue y capturar el código de estado HTTP
+          http_status=$(curl --request POST \
+            --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --data '{"clearCache": "do_not_clear"}' \
+            --output response.json \
+            --write-out "%{http_code}")
 
-          # Guardamos headers y body para diagnóstico
-          http_status=$(curl -s -D headers.txt -o response.json -w "%{http_code}" -X POST \
-            -H "Accept: application/json" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${RENDER_API_KEY}" \
-            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
-            -d '{"clearCache":"do_not_clear"}') || true
-
-          echo "Respuesta HTTP: $http_status"
-          echo "--- Response body ---"
-          cat response.json || true
-          echo "--- Response headers ---"
-          sed -n '1,200p' headers.txt || true
+          echo "Paso 2: La API de Render respondió con el código de estado HTTP: $http_status"
+          
+          deploy_response=$(cat response.json)
+          echo "Paso 3: Contenido de la respuesta de la API:"
+          echo "$deploy_response"
 
           if [ "$http_status" -ne 201 ] && [ "$http_status" -ne 202 ]; then
-            echo "Error: la API de Render no inició el despliegue correctamente (HTTP $http_status)." >&2
+            echo "Error: El código de estado no es 201 ni 202. El despliegue no se pudo iniciar."
             exit 1
           fi
 
-          # Intentos de extracción del id desde varios paths posibles en el JSON
-          deploy_id=$(jq -r 'if .id then .id elif .deploy and .deploy.id then .deploy.id elif .data and .data.id then .data.id else empty end' response.json || true)
+          echo "Paso 4: Intentando extraer el ID del despliegue usando jq..."
+          deploy_id=$(echo "$deploy_response" | jq -r '.id')
 
-          # Si no está en el body, intentar extraer del header Location
-          if [ -z "$deploy_id" ]; then
-            loc_header=$(grep -i '^Location:' headers.txt || true)
-            if [ -n "$loc_header" ]; then
-              # Extraer último segmento de la URL en Location
-              url=$(echo "$loc_header" | awk '{print $2}' | tr -d '\r') || true
-              deploy_id=$(echo "$url" | sed -E 's:.*/([^/]+)$:\1:') || true
-            fi
+          if [ -z "$deploy_id" ] || [ "$deploy_id" == "null" ]; then
+            echo "Error: No se pudo extraer un 'id' válido de la respuesta de la API."
+            echo "Causa probable: ¿Está 'Auto-Deploy' desactivado en Render? Si está activado, puede causar conflictos."
+            exit 1
           fi
 
-          # Fallback adicional: buscar cualquier campo "id" recursivamente en el JSON
-          if [ -z "$deploy_id" ]; then
-            echo "Intentando extracción recursiva de cualquier campo 'id' en response.json..."
-            deploy_id=$(jq -r '.. | objects | .id? // empty' response.json | head -n1 || true)
-          fi
+          echo "Paso 5: Despliegue iniciado con éxito. ID del despliegue: $deploy_id"
 
-          # Último recurso: buscar patrones tipo UUID o números en el body
-          if [ -z "$deploy_id" ]; then
-            echo "Intentando extraer patrón UUID/numérico del body..."
-            deploy_id=$(grep -Eo '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' response.json | head -n1 || true)
-            if [ -z "$deploy_id" ]; then
-              deploy_id=$(grep -Eo '[0-9]+' response.json | head -n1 || true)
-            fi
-          fi
+          # Esperar y verificar el estado del despliegue en un bucle
+          while true; do
+            sleep 30
+            deploy_status=$(curl -s --request GET \
+              --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$deploy_id" \
+              --header "Accept: application/json" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" | jq -r '.status')
 
-          # Registro final para debugging
-          if [ -n "$deploy_id" ]; then
-            echo "Despliegue iniciado con id: $deploy_id"
-          else
-            echo "No se encontró id en la respuesta directa; intentaremos obtenerlo consultando la lista de deploys del servicio..."
+            echo "Estado actual del despliegue: $deploy_status"
 
-            # Intentar obtener lista de despliegues del servicio y extraer el más reciente
-            # curl -s -H "Accept: application/json" -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=10" -o deploys_list.json || true
-            # echo "--- deploys_list.json ---"
-            # cat deploys_list.json || true
-            #
-            # deploy_id=$(jq -r 'if type=="array" then .[0].id elif .deploys then .deploys[0].id elif .data then .data[0].id elif .id then .id elif .deploy and .deploy.id then .deploy.id else empty end' deploys_list.json || true)
-            #
-            # # Fallback recursivo si sigue vacío
-            # if [ -z "$deploy_id" ]; then
-            #   echo "Intentando extracción recursiva de cualquier 'id' en deploys_list.json..."
-            #   deploy_id=$(jq -r '.. | objects | .id? // empty' deploys_list.json | head -n1 || true)
-            # fi
-
-            # Intentar listar deploys varias veces (reintentos) para capturar el deploy que se acaba de crear
-            deploy_id=""
-            for attempt in $(seq 1 10); do
-              echo "Reintento $attempt: consultando lista de deploys..."
-              curl -s -H "Accept: application/json" -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=10" -o deploys_list.json || true
-              echo "--- deploys_list.json (intent $attempt) ---"
-              cat deploys_list.json || true
-              deploy_id=$(jq -r 'if type=="array" and .[0].id then .[0].id elif .deploys and .deploys[0].id then .deploys[0].id elif .data and .data[0].id then .data[0].id elif .id then .id elif .deploy and .deploy.id then .deploy.id else empty end' deploys_list.json | head -n1 || true)
-              if [ -n "$deploy_id" ]; then
-                echo "Encontrado deploy_id en lista: $deploy_id"
-                break
-              fi
-              sleep 3
-            done
-
-            # Fallback recursivo si sigue vacío
-            if [ -z "$deploy_id" ]; then
-              echo "Intentando extracción recursiva de cualquier 'id' en deploys_list.json..."
-              deploy_id=$(jq -r '.. | objects | .id? // empty' deploys_list.json | head -n1 || true)
-            fi
-
-            if [ -n "$deploy_id" ]; then
-              echo "Deploy id encontrado en lista: $deploy_id"
-            else
-              echo "Error: no se pudo extraer el id del despliegue." >&2
-              echo "Contenido de response.json:" >&2
-              cat response.json >&2 || true
-              echo "Contenido de headers.txt:" >&2
-              sed -n '1,200p' headers.txt >&2 || true
-              echo "Contenido de deploys_list.json:" >&2
-              cat deploys_list.json >&2 || true
-              exit 1
-            fi
-          fi
-
-          # Polling del estado del despliegue
-          for i in $(seq 1 30); do
-            sleep 10
-            deploy_status=$(curl -s -H "Accept: application/json" -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${deploy_id}" | jq -r '.status // empty' || true)
-            echo "Intento $i - estado: $deploy_status"
-            if [ "$deploy_status" = "live" ]; then
+            if [ "$deploy_status" == "live" ]; then
               echo "Despliegue exitoso."
-              exit 0
-            fi
-            if [ "$deploy_status" = "build_failed" ] || [ "$deploy_status" = "canceled" ] || [ "$deploy_status" = "deactivated" ]; then
-              echo "El despliegue falló con estado: $deploy_status" >&2
+              break
+            elif [ "$deploy_status" == "build_failed" ] || [ "$deploy_status" == "canceled" ] || [ "$deploy_status" == "deactivated" ]; then
+              echo "El despliegue ha fallado con estado: $deploy_status"
               exit 1
             fi
           done
-
-          echo "Timeout: el despliegue no alcanzó estado 'live' en el tiempo esperado." >&2
-          exit 1
 
       - name: Disparar Rollback si el despliegue falló
         if: failure()
         uses: actions/github-script@v6
         with:
           script: |
-            console.log('Iniciando rollback via workflow dispatch...');
+            console.log('El despliegue ha fallado. Iniciando el workflow de rollback...');
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'rollback.yml',
               ref: 'main'
-            });
+            })

@@ -16,8 +16,6 @@ defaults:
   run:
     working-directory: BACKEND/BIBLIOTECA
 
-permissions:
-  actions: write
 
 jobs:
   build:
@@ -43,16 +41,3 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test
-
-      - name: Trigger CD workflow (dispatch) on success to main
-        if: ${{ github.ref == 'refs/heads/main' }}
-        uses: actions/github-script@v6
-        with:
-          script: |
-            console.log('Disparando workflow de CD (cd.yml) vía API...');
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'cd.yml',
-              ref: 'main'
-            });
