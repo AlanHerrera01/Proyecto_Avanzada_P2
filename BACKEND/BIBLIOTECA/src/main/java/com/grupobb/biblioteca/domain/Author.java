@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
  * - nombre: nombre del autor (no nulo)
  * - nacionalidad: país/region del autor (opcional)
  */
+//bien
 @Entity
 @Table(name = "autores")
 public class Author {
