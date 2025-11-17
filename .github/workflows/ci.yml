@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
-      - CI
+    paths:
+      - 'BACKEND/BIBLIOTECA/**'
   pull_request:
     branches:
       - main
-      - CI
+    paths:
+      - 'BACKEND/BIBLIOTECA/**'
 
 defaults:
   run:
@@ -35,4 +37,3 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test -Dspring.profiles.active=test
-
