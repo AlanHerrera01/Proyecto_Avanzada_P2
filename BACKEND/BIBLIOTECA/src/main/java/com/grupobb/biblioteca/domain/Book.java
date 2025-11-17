@@ -2,6 +2,7 @@ package com.grupobb.biblioteca.domain;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * Entidad JPA que representa la tabla `libros`.
