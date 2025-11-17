@@ -11,10 +11,13 @@ on:
       - main
     paths:
       - 'BACKEND/BIBLIOTECA/**'
-
+#see
 defaults:
   run:
     working-directory: BACKEND/BIBLIOTECA
+
+permissions:
+  actions: write
 
 jobs:
   build:
@@ -32,8 +35,24 @@ jobs:
       - name: Grant execute permission for Gradle
         run: chmod +x ./gradlew
 
+      - name: Set project version
+        run: sed -i "s/^version = '.*'$/version = '0.0.1.${{ github.run_number }}'/" build.gradle
+
       - name: Build with Gradle
         run: ./gradlew clean build
 
       - name: Run tests
-        run: ./gradlew test -Dspring.profiles.active=test
+        run: ./gradlew test
+
+      - name: Trigger CD workflow (dispatch) on success to main
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            console.log('Disparando workflow de CD (cd.yml) vía API...');
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'cd.yml',
+              ref: 'main'
+            });

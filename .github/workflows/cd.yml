@@ -1,4 +1,117 @@
-name: cd.yml
+name: CD - Despliegue en Render
+
 on:
+  workflow_run:
+    workflows: ["CI - Build and Test"]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ['BACKEND/BIBLIOTECA/**']
+  workflow_dispatch: {}
 
 jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      || github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Debug event
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Event payload summary:"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "workflow_run.name=${{ github.event.workflow_run.name }}"
+            echo "workflow_run.conclusion=${{ github.event.workflow_run.conclusion }}"
+          else
+            echo "push.ref=${{ github.ref }}"
+            echo "push.sha=${{ github.sha }}"
+          fi
+
+      - name: Verify required secrets
+        run: |
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
+            echo "Error: secret RENDER_API_KEY no está definido." >&2
+            exit 1
+          fi
+          if [ -z "${{ secrets.RENDER_SERVICE_ID }}" ]; then
+            echo "Error: secret RENDER_SERVICE_ID no está definido." >&2
+            exit 1
+          fi
+
+      - name: Check Dockerfile exists in BACKEND/BIBLIOTECA
+        run: |
+          if [ ! -f "BACKEND/BIBLIOTECA/Dockerfile" ]; then
+            echo "Advertencia: no se encontró BACKEND/BIBLIOTECA/Dockerfile en el repositorio." >&2
+          else
+            echo "Se encontró BACKEND/BIBLIOTECA/Dockerfile. OK."
+          fi
+
+      - name: Desplegar en Render y verificar estado
+        id: deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          echo "Iniciando despliegue en Render..."
+
+          http_status=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -d '{"clearCache":"do_not_clear"}') || true
+
+          echo "Respuesta HTTP: $http_status"
+          cat response.json || true
+
+          if [ "$http_status" -ne 201 ] && [ "$http_status" -ne 202 ]; then
+            echo "Error: la API de Render no inició el despliegue correctamente (HTTP $http_status)." >&2
+            exit 1
+          fi
+
+          deploy_id=$(jq -r '.id // empty' response.json || true)
+          if [ -z "$deploy_id" ]; then
+            echo "Error: no se pudo extraer el id del despliegue." >&2
+            exit 1
+          fi
+
+          echo "Despliegue iniciado con id: $deploy_id"
+
+          # Polling del estado del despliegue
+          for i in $(seq 1 30); do
+            sleep 10
+            deploy_status=$(curl -s -H "Accept: application/json" -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${deploy_id}" | jq -r '.status // empty' || true)
+            echo "Intento $i - estado: $deploy_status"
+            if [ "$deploy_status" = "live" ]; then
+              echo "Despliegue exitoso."
+              exit 0
+            fi
+            if [ "$deploy_status" = "build_failed" ] || [ "$deploy_status" = "canceled" ] || [ "$deploy_status" = "deactivated" ]; then
+              echo "El despliegue falló con estado: $deploy_status" >&2
+              exit 1
+            fi
+          done
+
+          echo "Timeout: el despliegue no alcanzó estado 'live' en el tiempo esperado." >&2
+          exit 1
+
+      - name: Disparar Rollback si el despliegue falló
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            console.log('Iniciando rollback via workflow dispatch...');
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'rollback.yml',
+              ref: 'main'
+            });

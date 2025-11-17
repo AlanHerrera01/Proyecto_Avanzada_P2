@@ -1,0 +1,36 @@
+name: CD - Rollback en Render
+
+on:
+  workflow_dispatch: # Permite que este workflow sea disparado manualmente o por otro workflow
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Buscar último despliegue exitoso y revertir
+        run: |
+          echo "Buscando el último despliegue exitoso..."
+
+          # Listar los despliegues para encontrar el último con estado 'live'
+          deploys=$(curl --request GET \
+            --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys?limit=20" \
+            --header "Accept: application/json" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}") || true
+
+          # Usar 'jq' para parsear el JSON y encontrar el commit ID del último despliegue exitoso
+          successful_commit_id=$(echo "$deploys" | jq -r '.[] | select(.deploy.status == "live") | .deploy.commit.id' | head -n 1) || true
+
+          if [ -z "$successful_commit_id" ]; then
+            echo "Error: No se encontró un despliegue previo exitoso para revertir."
+            exit 1
+          fi
+
+          echo "Se encontró el commit exitoso: $successful_commit_id. Iniciando rollback..."
+
+          # Crear un nuevo despliegue usando el commit ID del último despliegue exitoso
+          curl --request POST \
+            --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            --header "Accept: application/json" \
+            --header "Content-Type: application/json" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --data '{"commitId": "'"$successful_commit_id"'"}' || true
