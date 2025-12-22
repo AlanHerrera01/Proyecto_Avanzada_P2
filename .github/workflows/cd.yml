@@ -1,30 +1,46 @@
+# Nombre del workflow (aparece en la pestaña Actions)
 name: CD - Despliegue en Render
 
 on:
+  # Este workflow se ejecuta cuando OTRO workflow termina
   workflow_run:
+    # Nombre del workflow que debe completarse antes: CI - Build and Test
     workflows: ["CI - Build and Test"]
     types:
+      # Solo cuando ese workflow haya "completado" (success o failure)
       - completed
 
 # Control de concurrencia para evitar despliegues simultáneos
 concurrency:
+  # Agrupa por nombre de workflow y rama (ref)
   group: ${{ github.workflow }}-${{ github.ref }}
+  # Si se dispara uno nuevo, cancela el que esté en progreso
   cancel-in-progress: true
 
 jobs:
   deploy:
+    # Ejecutar el job en una máquina Ubuntu
     runs-on: ubuntu-latest
+
     permissions:
-      actions: write # Necesario para disparar el rollback
+      # Permiso para poder disparar otro workflow (rollback)
+      actions: write
+
+    # Solo ejecutar este job si el workflow anterior terminó en success
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     steps:
       - name: Desplegar en Render y verificar estado
         id: deploy
         env:
+          # Clave de la API de Render (guardada como secreto en GitHub)
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          # ID del servicio de Render (guardado como secreto)
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
           echo "Paso 1: Iniciando el despliegue en Render..."
+
+          # Llamada POST a la API de Render para iniciar un deploy
           http_status=$(curl --request POST \
             --url "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
             --header "Accept: application/json" \
@@ -34,33 +50,43 @@ jobs:
             --output response.json \
             --write-out "%{http_code}")
 
+          # Muestra el código HTTP de respuesta (201 o 202 = OK)
           echo "Paso 2: La API de Render respondió con el código de estado HTTP: $http_status"
+
+          # Guarda el contenido JSON de la respuesta
           deploy_response=$(cat response.json)
           echo "Paso 3: Contenido de la respuesta de la API:"
           echo "$deploy_response"
 
+          # Si el código HTTP no es 201 ni 202, marcar error
           if [ "$http_status" -ne 201 ] && [ "$http_status" -ne 202 ]; then
             echo "Error: El despliegue no se pudo iniciar (código de estado: $http_status)."
             exit 1
           fi
 
+          # Extraer el ID del despliegue desde la respuesta JSON
           deploy_id=$(echo "$deploy_response" | jq -r '.id')
 
+          # Si no se obtuvo ID, consultar la lista de despliegues recientes
           if [ -z "$deploy_id" ] || [ "$deploy_id" == "null" ]; then
             echo "Paso 4: No se encontró un ID en la respuesta inicial. Consultando la lista de despliegues..."
-            sleep 5 # Dar tiempo a Render para que procese la solicitud
-            
+            # Pausa pequeña para que Render procese la solicitud
+            sleep 5 
+          
+            # Obtener el último deploy del servicio
             deploys_list=$(curl -s --request GET \
               --url "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=1" \
               --header "Accept: application/json" \
               --header "Authorization: Bearer ${RENDER_API_KEY}")
-            
+          
             echo "Respuesta de la lista de despliegues:"
             echo "$deploys_list"
-            
+          
+            # Tomar el ID del primer deploy de la lista
             deploy_id=$(echo "$deploys_list" | jq -r '.[0].deploy.id')
           fi
 
+          # Si aún no hay un ID válido, fallar el job
           if [ -z "$deploy_id" ] || [ "$deploy_id" == "null" ]; then
             echo "Error: No se pudo obtener un ID de despliegue válido."
             exit 1
@@ -68,9 +94,12 @@ jobs:
 
           echo "Paso 5: Despliegue iniciado con éxito. ID del despliegue: $deploy_id"
 
-          # Esperar y verificar el estado del despliegue en un bucle
+          # Bucle para consultar periódicamente el estado del despliegue
           while true; do
+            # Esperar 30 segundos entre consultas
             sleep 30
+
+            # Llamada GET a la API de Render para ver el estado del deploy
             deploy_status=$(curl -s --request GET \
               --url "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/$deploy_id" \
               --header "Accept: application/json" \
@@ -78,9 +107,11 @@ jobs:
 
             echo "Estado actual del despliegue: $deploy_status"
 
+            # Si el estado es "live", el despliegue fue exitoso
             if [ "$deploy_status" == "live" ]; then
               echo "Despliegue exitoso."
               break
+            # Si aparece alguno de estos estados, consideramos que falló
             elif [ "$deploy_status" == "build_failed" ] || [ "$deploy_status" == "canceled" ] || [ "$deploy_status" == "deactivated" ]; then
               echo "El despliegue ha fallado con estado: $deploy_status"
               exit 1
@@ -88,11 +119,13 @@ jobs:
           done
 
       - name: Disparar Rollback si el despliegue falló
+        # Solo se ejecuta si el job anterior falló (failure())
         if: failure()
         uses: actions/github-script@v6
         with:
           script: |
             console.log('El despliegue ha fallado. Iniciando el workflow de rollback...');
+            # Lanza el workflow rollback.yml en la rama main
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,

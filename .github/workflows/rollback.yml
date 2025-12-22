@@ -1,26 +1,33 @@
+# Nombre del workflow de rollback
 name: CD - Rollback en Render
 
 on:
+  # Este workflow se puede lanzar manualmente o desde otro workflow (por ejemplo, cuando falle el deploy)
   workflow_dispatch: # Permite que este workflow sea disparado manualmente o por otro workflow
 
 jobs:
   rollback:
+    # Máquina donde se ejecuta el job
     runs-on: ubuntu-latest
     steps:
       - name: Buscar último despliegue exitoso y revertir
         run: |
           echo "Buscando el último despliegue exitoso..."
           
-          # Listar los despliegues para encontrar el último con estado 'live'
+          # 1) Listar los últimos despliegues del servicio en Render (hasta 20)
           deploys=$(curl --request GET \
             --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys?limit=20" \
             --header "Accept: application/json" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
           
-          # Usar la herramienta 'jq' para parsear el JSON y encontrar el commit ID del último despliegue exitoso
-          # Nota: Render a veces devuelve despliegues 'live' que son antiguos. Buscamos el más reciente.
+          # 2) Usar 'jq' para leer el JSON y buscar el último despliegue con estado 'live'
+          #    - .[] recorre la lista de despliegues
+          #    - select(.deploy.status == "live") filtra los que están en estado 'live'
+          #    - .deploy.commit.id obtiene el ID del commit asociado a ese deploy
+          #    - head -n 1 se queda con el primero (el más reciente)
           successful_commit_id=$(echo "$deploys" | jq -r '.[] | select(.deploy.status == "live") | .deploy.commit.id' | head -n 1)
           
+          # 3) Validar que realmente se obtuvo un commit ID
           if [ -z "$successful_commit_id" ]; then
             echo "Error: No se encontró un despliegue previo exitoso para revertir."
             exit 1
@@ -28,7 +35,8 @@ jobs:
           
           echo "Se encontró el commit exitoso: $successful_commit_id. Iniciando rollback..."
           
-          # Crear un nuevo despliegue usando el commit ID del último despliegue exitoso
+          # 4) Crear un nuevo despliegue en Render usando el commit ID del último deploy exitoso
+          #    Esto básicamente despliega de nuevo la versión que estaba viva antes.
           curl --request POST \
             --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
             --header "Accept: application/json" \
@@ -37,4 +45,3 @@ jobs:
             --data '{
               "commitId": "'"$successful_commit_id"'"
             }'
-

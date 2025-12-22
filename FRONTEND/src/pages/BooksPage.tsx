@@ -7,6 +7,13 @@ import { AlertMessage } from "../components/ui/AlertMessage";
 import { bookService } from "../services/bookService";
 import { authorService } from "../services/authorService";
 
+import { Activity } from "lucide-react";
+import {
+  useEventBus,
+  useSystemMetrics,
+  useEventPublisher,
+} from "../hooks/useEventBus";
+
 import type { Book, BookFormData, Author } from "../types";
 
 export const BooksPage: React.FC = () => {
@@ -15,6 +22,8 @@ export const BooksPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(false);
+  const systemMetrics = useSystemMetrics();
+  const { publishBookEvent, publishSystemEvent } = useEventPublisher();
 
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,14 +40,35 @@ export const BooksPage: React.FC = () => {
     loadAuthors();
   }, []);
 
+  useEventBus("BOOK_CREATED", () => {
+    loadBooks();
+    setSuccess("Libro creado en tiempo real");
+  });
+
+  useEventBus("BOOK_UPDATED", () => {
+    loadBooks();
+    setSuccess("Libro actualizado en tiempo real");
+  });
+
+  useEventBus("BOOK_DELETED", () => {
+    loadBooks();
+    setSuccess("Libro eliminado en tiempo real");
+  });
+
   const loadBooks = async () => {
     try {
       setLoading(true);
+      publishSystemEvent("Cargando libros", "info");
+
       const data = await bookService.getAll();
       setBooks(data);
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error('Error desconocido');
-      setError(error.message);
+
+      publishSystemEvent(`Libros cargados: ${data.length}`, "info", {
+        count: data.length,
+      });
+    } catch (err) {
+      publishSystemEvent("Error cargando libros", "error");
+      setError("Error cargando libros");
     } finally {
       setLoading(false);
     }
@@ -59,16 +89,18 @@ export const BooksPage: React.FC = () => {
 
       if (editingBook) {
         await bookService.update(editingBook.id, data);
+        publishBookEvent("BOOK_UPDATED", { bookId: editingBook.id });
         setSuccess("Libro actualizado correctamente");
       } else {
-        await bookService.create(data);
+        const created = await bookService.create(data);
+        publishBookEvent("BOOK_CREATED", { bookId: created.id });
         setSuccess("Libro creado exitosamente");
       }
 
       await loadBooks();
       handleCloseModal();
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error('Error desconocido');
+      const error = err instanceof Error ? err : new Error("Error desconocido");
       setError(error.message);
     } finally {
       setLoading(false);
@@ -81,10 +113,12 @@ export const BooksPage: React.FC = () => {
     try {
       setLoading(true);
       await bookService.delete(id);
+      publishBookEvent("BOOK_DELETED", { bookId: id });
       setSuccess("Libro eliminado correctamente");
+
       await loadBooks();
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error('Error desconocido');
+      const error = err instanceof Error ? err : new Error("Error desconocido");
       setError(error.message);
     } finally {
       setLoading(false);
@@ -122,14 +156,32 @@ export const BooksPage: React.FC = () => {
         />
 
         {/* Encabezado */}
+
+        <div className="bg-white rounded-4 shadow-lg px-5 py-3 mb-5 border border-primary border-opacity-20">
+          <div className="d-flex align-items-center">
+            <Activity size={24} className="me-3 text-primary" />
+            <span className="fw-bold fs-5">Métricas Reactivas:</span>
+            <span className="badge bg-success rounded-pill px-3 py-2 ms-3">
+              Procesados: {systemMetrics.processed}
+            </span>
+            <span className="badge bg-danger rounded-pill px-3 py-2 ms-2">
+              Errores: {systemMetrics.errors}
+            </span>
+          </div>
+        </div>
+
         <div className="bg-white rounded-4 shadow-lg px-5 py-4 mb-5 d-flex flex-column flex-md-row align-items-md-center justify-content-md-between border border-primary border-opacity-20">
           <div>
-            <h1 className="display-4 fw-bold mb-1 text-primary">Catálogo de Libros</h1>
-            <p className="text-secondary mb-0 fs-5">Administra tu colección literaria</p>
+            <h1 className="display-4 fw-bold mb-1 text-primary">
+              Catálogo de Libros
+            </h1>
+            <p className="text-secondary mb-0 fs-5">
+              Administra tu colección literaria
+            </p>
           </div>
 
-          <button 
-            onClick={() => setIsModalOpen(true)} 
+          <button
+            onClick={() => setIsModalOpen(true)}
             className="btn btn-primary d-flex align-items-center px-4 py-2 fs-5 shadow-lg rounded-pill hover:shadow-xl transition-all"
             style={{ minWidth: 200 }}
           >
@@ -141,20 +193,33 @@ export const BooksPage: React.FC = () => {
         {/* Listado */}
         {loading && books.length === 0 ? (
           <div className="text-center py-5">
-            <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
+            <div
+              className="spinner-border text-primary mb-3"
+              role="status"
+              style={{ width: "3rem", height: "3rem" }}
+            >
               <span className="visually-hidden">Cargando...</span>
             </div>
-            <p className="text-secondary fs-5 fw-semibold">Cargando libros...</p>
+            <p className="text-secondary fs-5 fw-semibold">
+              Cargando libros...
+            </p>
           </div>
         ) : books.length === 0 ? (
           <div className="text-center py-5 bg-white rounded-4 shadow-lg">
-            <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mx-auto mb-4" style={{width: '100px', height: '100px'}}>
+            <div
+              className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mx-auto mb-4"
+              style={{ width: "100px", height: "100px" }}
+            >
               <BookOpen size={50} className="text-primary" />
             </div>
-            <p className="text-secondary fs-4 fw-bold mb-2">No hay libros registrados</p>
-            <p className="text-muted fs-6 mb-4">Agrega tu primer libro para comenzar</p>
-            <button 
-              onClick={() => setIsModalOpen(true)} 
+            <p className="text-secondary fs-4 fw-bold mb-2">
+              No hay libros registrados
+            </p>
+            <p className="text-muted fs-6 mb-4">
+              Agrega tu primer libro para comenzar
+            </p>
+            <button
+              onClick={() => setIsModalOpen(true)}
               className="btn btn-primary rounded-pill px-4 py-2 shadow hover:shadow-lg transition-all"
             >
               <Plus size={20} className="me-2" />
@@ -174,30 +239,45 @@ export const BooksPage: React.FC = () => {
                   </div>
                   <div className="card-body d-flex flex-column justify-content-between p-3">
                     <div className="text-center">
-                      <h5 className="card-title fw-bold text-dark mb-2 fs-6" style={{height: "48px", display: "flex", alignItems: "center", justifyContent: "center"}}>
+                      <h5
+                        className="card-title fw-bold text-dark mb-2 fs-6"
+                        style={{
+                          height: "48px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
                         {book.titulo}
                       </h5>
-                      <p className="card-text text-secondary mb-3 small" style={{height: "20px"}}>
+                      <p
+                        className="card-text text-secondary mb-3 small"
+                        style={{ height: "20px" }}
+                      >
                         {book.autorNombre}
                       </p>
                     </div>
                     <div className="d-flex flex-column gap-2 mt-auto">
                       <div className="text-center">
                         <span
-                          className={`badge rounded-pill px-3 py-2 fw-bold shadow-sm ${book.disponible ? "bg-success text-white" : "bg-danger text-white"}`}
+                          className={`badge rounded-pill px-3 py-2 fw-bold shadow-sm ${
+                            book.disponible
+                              ? "bg-success text-white"
+                              : "bg-danger text-white"
+                          }`}
                         >
                           {book.disponible ? "Disponible" : "Prestado"}
                         </span>
                       </div>
                       <div className="d-flex justify-content-center gap-2">
-                        <button 
+                        <button
                           className="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 d-flex align-items-center hover:shadow-md transition-all"
                           onClick={() => handleEdit(book)}
                         >
                           <Edit2 size={12} className="me-1" />
                           Editar
                         </button>
-                        <button 
+                        <button
                           className="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 d-flex align-items-center hover:shadow-md transition-all"
                           onClick={() => handleDelete(book.id)}
                         >
@@ -214,125 +294,138 @@ export const BooksPage: React.FC = () => {
         )}
 
         {/* Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        title={editingBook ? "Editar Libro" : "Nuevo Libro"}
-      >
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="text-center mb-4">
-            <div className="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style={{width: '80px', height: '80px'}}>
-              <BookOpen size={40} className="text-primary" />
+        <Modal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title={editingBook ? "Editar Libro" : "Nuevo Libro"}
+        >
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="text-center mb-4">
+              <div
+                className="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                style={{ width: "80px", height: "80px" }}
+              >
+                <BookOpen size={40} className="text-primary" />
+              </div>
+              <h4 className="text-primary fw-bold mb-2">
+                {editingBook
+                  ? "Editando Información del Libro"
+                  : "Agregando Nuevo Libro"}
+              </h4>
+              <p className="text-muted">
+                {editingBook
+                  ? "Modifica los datos del libro seleccionado"
+                  : "Completa los datos para registrar un nuevo libro en la biblioteca"}
+              </p>
             </div>
-            <h4 className="text-primary fw-bold mb-2">
-              {editingBook ? "Editando Información del Libro" : "Agregando Nuevo Libro"}
-            </h4>
-            <p className="text-muted">
-              {editingBook ? "Modifica los datos del libro seleccionado" : "Completa los datos para registrar un nuevo libro en la biblioteca"}
-            </p>
-          </div>
 
-          <div className="row g-3">
-            <div className="col-12">
-              <div className="form-floating">
-                <input
-                  type="text"
-                  className={`form-control ${errors.titulo ? 'is-invalid' : ''}`}
-                  id="titulo"
-                  placeholder="Título del libro"
-                  {...register("titulo", {
-                    required: "El título es obligatorio",
-                    minLength: {
-                      value: 2,
-                      message: "El título debe tener al menos 2 caracteres"
-                    }
-                  })}
-                />
-                <label htmlFor="titulo" className="text-primary fw-semibold">
-                  <BookOpen size={16} className="me-2" />
-                  Título del Libro
-                </label>
-                {errors.titulo && (
-                  <div className="invalid-feedback">
-                    <i className="bi bi-exclamation-circle me-1"></i>
-                    {errors.titulo.message}
-                  </div>
-                )}
+            <div className="row g-3">
+              <div className="col-12">
+                <div className="form-floating">
+                  <input
+                    type="text"
+                    className={`form-control ${
+                      errors.titulo ? "is-invalid" : ""
+                    }`}
+                    id="titulo"
+                    placeholder="Título del libro"
+                    {...register("titulo", {
+                      required: "El título es obligatorio",
+                      minLength: {
+                        value: 2,
+                        message: "El título debe tener al menos 2 caracteres",
+                      },
+                    })}
+                  />
+                  <label htmlFor="titulo" className="text-primary fw-semibold">
+                    <BookOpen size={16} className="me-2" />
+                    Título del Libro
+                  </label>
+                  {errors.titulo && (
+                    <div className="invalid-feedback">
+                      <i className="bi bi-exclamation-circle me-1"></i>
+                      {errors.titulo.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="col-12">
+                <div className="form-floating">
+                  <select
+                    className={`form-select ${
+                      errors.autorId ? "is-invalid" : ""
+                    }`}
+                    id="autorId"
+                    {...register("autorId", {
+                      required: "Debes seleccionar un autor",
+                      valueAsNumber: true,
+                      validate: (v) => v > 0 || "Selecciona un autor válido",
+                    })}
+                  >
+                    <option value="">Selecciona un autor...</option>
+                    {authors.map((author) => (
+                      <option key={author.id} value={author.id}>
+                        {author.nombre} ({author.nacionalidad})
+                      </option>
+                    ))}
+                  </select>
+                  <label htmlFor="autorId" className="text-primary fw-semibold">
+                    <Edit2 size={16} className="me-2" />
+                    Autor del Libro
+                  </label>
+                  {errors.autorId && (
+                    <div className="invalid-feedback">
+                      <i className="bi bi-exclamation-circle me-1"></i>
+                      {errors.autorId.message}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="col-12">
-              <div className="form-floating">
-                <select
-                  className={`form-select ${errors.autorId ? 'is-invalid' : ''}`}
-                  id="autorId"
-                  {...register("autorId", {
-                    required: "Debes seleccionar un autor",
-                    valueAsNumber: true,
-                    validate: (v) => v > 0 || "Selecciona un autor válido",
-                  })}
+            <div className="d-flex justify-content-between align-items-center mt-4 pt-4 border-top">
+              <div className="text-muted small">
+                <i className="bi bi-info-circle me-1"></i>
+                {editingBook
+                  ? "Los cambios se guardarán al hacer clic en Actualizar"
+                  : "Todos los campos son obligatorios"}
+              </div>
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary rounded-pill px-4 py-2 d-flex align-items-center hover:shadow-md transition-all"
+                  onClick={handleCloseModal}
                 >
-                  <option value="">Selecciona un autor...</option>
-                  {authors.map((author) => (
-                    <option key={author.id} value={author.id}>
-                      {author.nombre} ({author.nacionalidad})
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="autorId" className="text-primary fw-semibold">
-                  <Edit2 size={16} className="me-2" />
-                  Autor del Libro
-                </label>
-                {errors.autorId && (
-                  <div className="invalid-feedback">
-                    <i className="bi bi-exclamation-circle me-1"></i>
-                    {errors.autorId.message}
-                  </div>
-                )}
+                  <i className="bi bi-x-circle me-2"></i>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary rounded-pill px-4 py-2 d-flex align-items-center hover:shadow-md transition-all"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Guardando...
+                    </>
+                  ) : editingBook ? (
+                    <>
+                      <i className="bi bi-check-circle me-2"></i>
+                      Actualizar Libro
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-plus-circle me-2"></i>
+                      Crear Libro
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-          </div>
-
-          <div className="d-flex justify-content-between align-items-center mt-4 pt-4 border-top">
-            <div className="text-muted small">
-              <i className="bi bi-info-circle me-1"></i>
-              {editingBook ? "Los cambios se guardarán al hacer clic en Actualizar" : "Todos los campos son obligatorios"}
-            </div>
-            <div className="d-flex gap-2">
-              <button 
-                type="button"
-                className="btn btn-outline-secondary rounded-pill px-4 py-2 d-flex align-items-center hover:shadow-md transition-all"
-                onClick={handleCloseModal}
-              >
-                <i className="bi bi-x-circle me-2"></i>
-                Cancelar
-              </button>
-              <button 
-                type="submit" 
-                className="btn btn-primary rounded-pill px-4 py-2 d-flex align-items-center hover:shadow-md transition-all"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2"></span>
-                    Guardando...
-                  </>
-                ) : editingBook ? (
-                  <>
-                    <i className="bi bi-check-circle me-2"></i>
-                    Actualizar Libro
-                  </>
-                ) : (
-                  <>
-                    <i className="bi bi-plus-circle me-2"></i>
-                    Crear Libro
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
       </div>
     </div>
   );

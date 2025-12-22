@@ -1,5 +1,5 @@
-import { Observable, Subject, BehaviorSubject, Subscription } from 'rxjs';
-import { filter, map, bufferTime } from 'rxjs/operators';
+import { Observable, Subject, BehaviorSubject, Subscription } from "rxjs";
+import { filter, map, bufferTime } from "rxjs/operators";
 
 // Tipos de eventos del sistema
 export interface Event {
@@ -10,7 +10,11 @@ export interface Event {
 }
 
 export interface LoanEvent extends Event {
-  type: 'LOAN_CREATED' | 'LOAN_RETURNED' | 'LOAN_ANALYSIS_STARTED' | 'LOAN_ANALYSIS_COMPLETED';
+  type:
+    | "LOAN_CREATED"
+    | "LOAN_RETURNED"
+    | "LOAN_ANALYSIS_STARTED"
+    | "LOAN_ANALYSIS_COMPLETED";
   payload: {
     loanId?: number;
     userId?: number;
@@ -23,11 +27,18 @@ export interface LoanEvent extends Event {
   };
 }
 
+export interface BookEvent extends Event {
+  type: "BOOK_CREATED" | "BOOK_UPDATED" | "BOOK_DELETED";
+  payload: {
+    bookId: number;
+  };
+}
+
 export interface SystemEvent extends Event {
-  type: 'SYSTEM_METRICS' | 'SYSTEM_ERROR' | 'SYSTEM_WARNING';
+  type: "SYSTEM_METRICS" | "SYSTEM_ERROR" | "SYSTEM_WARNING";
   payload: {
     message: string;
-    level: 'info' | 'warning' | 'error';
+    level: "info" | "warning" | "error";
     data?: unknown;
   };
 }
@@ -48,16 +59,16 @@ export class EventBus {
     errors: number;
     lastUpdate: number;
   }>({ processed: 0, errors: 0, lastUpdate: Date.now() });
-  
+
   private subscriptions = new Map<string, Subscription>();
   private config: EventBusConfig;
 
   private constructor() {
     this.config = {
-      batchSize: parseInt(import.meta.env.VITE_EVENT_BATCH_SIZE || '10'),
-      bufferTimeMs: parseInt(import.meta.env.VITE_EVENT_BUFFER_TIME || '1000'),
-      timeoutMs: parseInt(import.meta.env.VITE_EVENT_TIMEOUT || '5000'),
-      maxRetries: parseInt(import.meta.env.VITE_EVENT_MAX_RETRIES || '3')
+      batchSize: parseInt(import.meta.env.VITE_EVENT_BATCH_SIZE || "10"),
+      bufferTimeMs: parseInt(import.meta.env.VITE_EVENT_BUFFER_TIME || "1000"),
+      timeoutMs: parseInt(import.meta.env.VITE_EVENT_TIMEOUT || "5000"),
+      maxRetries: parseInt(import.meta.env.VITE_EVENT_MAX_RETRIES || "3"),
     };
 
     // Procesamiento reactivo de eventos con backpressure
@@ -77,32 +88,34 @@ export class EventBus {
   }
 
   private setupBatchProcessing() {
-    this.events$.pipe(
-      bufferTime(this.config.bufferTimeMs),
-      filter(events => events.length > 0)
-    ).subscribe({
-      next: (events) => {
-        const typedEvents = events as Event[];
-        this.processBatch(typedEvents);
-      },
-      error: (error) => {
-        console.error('[EventBus] Error en procesamiento por lotes:', error);
-        // Actualizar métricas de error
-        const currentMetrics = this.systemMetrics$.value;
-        this.systemMetrics$.next({
-          ...currentMetrics,
-          errors: currentMetrics.errors + 1,
-          lastUpdate: Date.now()
-        });
-      }
-    });
+    this.events$
+      .pipe(
+        bufferTime(this.config.bufferTimeMs),
+        filter((events) => events.length > 0)
+      )
+      .subscribe({
+        next: (events) => {
+          const typedEvents = events as Event[];
+          this.processBatch(typedEvents);
+        },
+        error: (error) => {
+          console.error("[EventBus] Error en procesamiento por lotes:", error);
+          // Actualizar métricas de error
+          const currentMetrics = this.systemMetrics$.value;
+          this.systemMetrics$.next({
+            ...currentMetrics,
+            errors: currentMetrics.errors + 1,
+            lastUpdate: Date.now(),
+          });
+        },
+      });
   }
 
   private processBatch(events: Event[]) {
     let processed = 0;
     let errors = 0;
 
-    events.forEach(event => {
+    events.forEach((event) => {
       try {
         // Procesamiento individual del evento
         this.processEvent(event);
@@ -118,31 +131,40 @@ export class EventBus {
     this.systemMetrics$.next({
       processed: currentMetrics.processed + processed,
       errors: currentMetrics.errors + errors,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
     });
   }
 
   private processEvent(event: Event) {
-    // Lógica específica según el tipo de evento
     switch (event.type) {
-      case 'LOAN_CREATED':
-      case 'LOAN_RETURNED':
-        console.log(`[EventBus] Evento de préstamo: ${event.type}`, event.payload);
+      case "LOAN_CREATED":
+      case "LOAN_RETURNED":
+        console.log(
+          `[EventBus] Evento de préstamo: ${event.type}`,
+          event.payload
+        );
         break;
-      case 'SYSTEM_METRICS':
-        console.log(`[EventBus] Métricas del sistema:`, event.payload);
+
+      case "BOOK_CREATED":
+      case "BOOK_UPDATED":
+      case "BOOK_DELETED":
+        console.log(`[EventBus] Evento de libro: ${event.type}`, event.payload);
+        break;
+
+      case "SYSTEM_METRICS":
+        console.log(`[EventBus] Evento del sistema:`, event.payload);
         break;
     }
   }
 
   // Publicar eventos
-  publish<T extends Event>(event: Omit<T, 'timestamp' | 'id'>): void {
+  publish<T extends Event>(event: Omit<T, "timestamp" | "id">): void {
     const fullEvent: T = {
-      ...event as T,
+      ...(event as T),
       timestamp: Date.now(),
-      id: this.generateEventId()
+      id: this.generateEventId(),
     };
-    
+
     this.events$.next(fullEvent);
   }
 
@@ -151,10 +173,12 @@ export class EventBus {
     eventType: string,
     callback: (event: T) => void
   ): Subscription {
-    const subscription = this.events$.pipe(
-      filter(event => event.type === eventType),
-      map(event => event as T)
-    ).subscribe(callback);
+    const subscription = this.events$
+      .pipe(
+        filter((event) => event.type === eventType),
+        map((event) => event as T)
+      )
+      .subscribe(callback);
 
     const subscriptionId = `${eventType}_${Date.now()}`;
     this.subscriptions.set(subscriptionId, subscription);
@@ -168,20 +192,35 @@ export class EventBus {
   }
 
   // Publicar eventos de sistema
-  publishSystemEvent(message: string, level: 'info' | 'warning' | 'error', data?: unknown): void {
+  publishSystemEvent(
+    message: string,
+    level: "info" | "warning" | "error",
+    data?: unknown
+  ): void {
     this.publish<SystemEvent>({
-      type: 'SYSTEM_METRICS',
-      payload: { message, level, data }
+      type: "SYSTEM_METRICS",
+      payload: { message, level, data },
     });
   }
 
   // Publicar eventos de préstamos
-  publishLoanEvent(type: LoanEvent['type'], payload: LoanEvent['payload']): void {
+  publishLoanEvent(
+    type: LoanEvent["type"],
+    payload: LoanEvent["payload"]
+  ): void {
     this.publish<LoanEvent>({
       type,
-      payload
+      payload,
     });
   }
+
+  publishBookEvent(type: BookEvent['type'], payload: BookEvent['payload']): void {
+  this.publish<BookEvent>({
+    type,
+    payload
+  });
+}
+
 
   // Limpiar suscripciones
   unsubscribe(subscriptionId: string): void {
@@ -194,18 +233,20 @@ export class EventBus {
 
   // Limpiar todas las suscripciones
   unsubscribeAll(): void {
-    this.subscriptions.forEach(subscription => subscription.unsubscribe());
+    this.subscriptions.forEach((subscription) => subscription.unsubscribe());
     this.subscriptions.clear();
   }
 
   private generateEventId(): string {
-    return `evt_${performance.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `evt_${performance.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
   }
 
   // Configuración dinámica
   updateConfig(newConfig: Partial<EventBusConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    console.log('[EventBus] Configuración actualizada:', this.config);
+    console.log("[EventBus] Configuración actualizada:", this.config);
   }
 
   getConfig(): EventBusConfig {

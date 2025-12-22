@@ -2,7 +2,21 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import { Subscription, Observable } from 'rxjs';
 import { eventBus, type Event, type EventBusConfig } from '../services/eventBus';
 
+// =======================
+// Tipos de eventos
+// =======================
+
+// Eventos de libros
+type BookEventType = 'BOOK_CREATED' | 'BOOK_UPDATED' | 'BOOK_DELETED';
+
+type BookEventPayload = {
+  bookId: number;
+};
+
+// =======================
 // Hook para suscribirse a eventos del EventBus
+// =======================
+
 export function useEventBus<T extends Event>(
   eventType: string,
   callback: (event: T) => void
@@ -23,7 +37,10 @@ export function useEventBus<T extends Event>(
   }, [eventType, callback]);
 }
 
+// =======================
 // Hook para obtener métricas del sistema en tiempo real
+// =======================
+
 export function useSystemMetrics() {
   const [metrics, setMetrics] = React.useState({
     processed: 0,
@@ -49,28 +66,67 @@ export function useSystemMetrics() {
   return metrics;
 }
 
+// =======================
 // Hook para publicar eventos con memoización
+// =======================
+
 export function useEventPublisher() {
-  const publishCallback = useCallback(<T extends Event>(event: Omit<T, 'timestamp' | 'id'>) => {
+  // Publicador genérico
+  const publishCallback = useCallback(<T extends Event>(
+    event: Omit<T, 'timestamp' | 'id'>
+  ) => {
     eventBus.publish(event);
   }, []);
 
-  const publishLoanEvent = useCallback((type: 'LOAN_CREATED' | 'LOAN_RETURNED' | 'LOAN_ANALYSIS_STARTED' | 'LOAN_ANALYSIS_COMPLETED', payload: { loanId?: number; userId?: number; bookId?: number; metrics?: { processed: number; errors: number; batch: number; } }) => {
+  // Publicar eventos de préstamos
+  const publishLoanEvent = useCallback((
+    type: 'LOAN_CREATED' | 'LOAN_RETURNED' | 'LOAN_ANALYSIS_STARTED' | 'LOAN_ANALYSIS_COMPLETED',
+    payload: {
+      loanId?: number;
+      userId?: number;
+      bookId?: number;
+      metrics?: {
+        processed: number;
+        errors: number;
+        batch: number;
+      };
+    }
+  ) => {
     eventBus.publishLoanEvent(type, payload);
   }, []);
 
-  const publishSystemEvent = useCallback((message: string, level: 'info' | 'warning' | 'error', data?: unknown) => {
+  // Publicar eventos de libros
+  const publishBookEvent = useCallback((
+    type: BookEventType,
+    payload: BookEventPayload
+  ) => {
+    eventBus.publish({
+      type,
+      payload
+    });
+  }, []);
+
+  // Publicar eventos del sistema
+  const publishSystemEvent = useCallback((
+    message: string,
+    level: 'info' | 'warning' | 'error',
+    data?: unknown
+  ) => {
     eventBus.publishSystemEvent(message, level, data);
   }, []);
 
   return {
     publish: publishCallback,
     publishLoanEvent,
+    publishBookEvent,
     publishSystemEvent
   };
 }
 
+// =======================
 // Hook para configuración del EventBus
+// =======================
+
 export function useEventBusConfig() {
   const getConfig = useCallback(() => eventBus.getConfig(), []);
   
@@ -81,7 +137,10 @@ export function useEventBusConfig() {
   return { getConfig, updateConfig };
 }
 
+// =======================
 // Hook genérico para suscripciones reactivas
+// =======================
+
 export function useReactiveSubscription<T>(
   observable$: Observable<T>,
   callback: (value: T) => void
