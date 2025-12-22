@@ -6,6 +6,7 @@ import { AlertMessage } from "../components/ui/AlertMessage";
 
 import { bookService } from "../services/bookService";
 import { authorService } from "../services/authorService";
+import { reactiveApi } from "../services/reactiveApi";
 
 import { Activity } from "lucide-react";
 import {
@@ -55,24 +56,28 @@ export const BooksPage: React.FC = () => {
     setSuccess("Libro eliminado en tiempo real");
   });
 
-  const loadBooks = async () => {
-    try {
-      setLoading(true);
-      publishSystemEvent("Cargando libros", "info");
+  const loadBooks = React.useCallback(() => {
+  setLoading(true);
+  publishSystemEvent('Cargando libros', 'info');
 
-      const data = await bookService.getAll();
-      setBooks(data);
-
-      publishSystemEvent(`Libros cargados: ${data.length}`, "info", {
-        count: data.length,
-      });
-    } catch (err) {
-      publishSystemEvent("Error cargando libros", "error");
-      setError("Error cargando libros");
-    } finally {
+  reactiveApi.getBooksReactive().subscribe({
+    next: (data) => {
+      setBooks(data as Book[]);
+      publishSystemEvent(
+        `Libros cargados: ${(data as Book[]).length}`,
+        'info'
+      );
+    },
+    error: (err) => {
+      setError(err.message ?? 'Error cargando libros');
+    },
+    complete: () => {
       setLoading(false);
     }
-  };
+  });
+}, [publishSystemEvent]);
+
+
 
   const loadAuthors = async () => {
     try {
@@ -83,47 +88,48 @@ export const BooksPage: React.FC = () => {
     }
   };
 
-  const onSubmit = async (data: BookFormData) => {
-    try {
-      setLoading(true);
+  const onSubmit = (data: BookFormData) => {
+  setLoading(true);
 
-      if (editingBook) {
-        await bookService.update(editingBook.id, data);
-        publishBookEvent("BOOK_UPDATED", { bookId: editingBook.id });
-        setSuccess("Libro actualizado correctamente");
-      } else {
-        const created = await bookService.create(data);
-        publishBookEvent("BOOK_CREATED", { bookId: created.id });
-        setSuccess("Libro creado exitosamente");
-      }
+  const observable = editingBook
+    ? reactiveApi.updateBookReactive(editingBook.id, data)
+    : reactiveApi.createBookReactive(data);
 
-      await loadBooks();
+  observable.subscribe({
+    next: () => {
+      setSuccess(
+        editingBook ? 'Libro actualizado correctamente' : 'Libro creado correctamente'
+      );
+    },
+    error: (err) => {
+      setError(err.message ?? 'Error guardando libro');
+    },
+    complete: () => {
+      setLoading(false);
       handleCloseModal();
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error("Error desconocido");
-      setError(error.message);
-    } finally {
+    }
+  });
+};
+
+
+  const handleDelete = (id: number) => {
+  if (!confirm('¿Eliminar libro?')) return;
+
+  setLoading(true);
+
+  reactiveApi.deleteBookReactive(id).subscribe({
+    next: () => {
+      setSuccess('Libro eliminado correctamente');
+    },
+    error: (err) => {
+      setError(err.message ?? 'Error eliminando libro');
+    },
+    complete: () => {
       setLoading(false);
     }
-  };
+  });
+};
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Está seguro de eliminar este libro?")) return;
-
-    try {
-      setLoading(true);
-      await bookService.delete(id);
-      publishBookEvent("BOOK_DELETED", { bookId: id });
-      setSuccess("Libro eliminado correctamente");
-
-      await loadBooks();
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error("Error desconocido");
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEdit = (book: Book) => {
     setEditingBook(book);

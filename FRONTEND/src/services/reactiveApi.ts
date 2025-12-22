@@ -103,6 +103,63 @@ export class ReactiveApiService {
     return observable;
   }
 
+  // === LIBROS ===
+
+createBookReactive(data: unknown): Observable<unknown> {
+  const observable = this.createObservable(
+    api.post('/books', data).then(r => r.data),
+    'CREATE_BOOK'
+  );
+
+  observable.subscribe({
+    next: (book) => {
+      eventBus.publish({
+        type: 'BOOK_CREATED',
+        payload: { bookId: (book as any).id }
+      });
+    }
+  });
+
+  return observable;
+}
+
+updateBookReactive(id: number, data: unknown): Observable<unknown> {
+  const observable = this.createObservable(
+    api.put(`/books/${id}`, data).then(r => r.data),
+    'UPDATE_BOOK'
+  );
+
+  observable.subscribe({
+    next: () => {
+      eventBus.publish({
+        type: 'BOOK_UPDATED',
+        payload: { bookId: id }
+      });
+    }
+  });
+
+  return observable;
+}
+
+deleteBookReactive(id: number): Observable<void> {
+  const observable = this.createObservable(
+    api.delete(`/books/${id}`).then(() => undefined),
+    'DELETE_BOOK'
+  );
+
+  observable.subscribe({
+    next: () => {
+      eventBus.publish({
+        type: 'BOOK_DELETED',
+        payload: { bookId: id }
+      });
+    }
+  });
+
+  return observable;
+}
+
+
   // Métodos reactivos para usuarios
   getUsersReactive(): Observable<unknown[]> {
     return this.createObservable(
