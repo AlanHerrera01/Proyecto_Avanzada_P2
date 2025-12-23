@@ -5,6 +5,8 @@ import java.time.LocalDate;
 public class LoanResponse {
 
     private Long id;
+    private Long usuarioId;
+    private Long libroId;
     private String usuarioNombre;
     private String libroTitulo;
     private LocalDate fechaPrestamo;
@@ -17,6 +19,8 @@ public class LoanResponse {
     public void setId(Long id) {
         this.id = id;
     }
+
+
 
     public String getUsuarioNombre() {
         return usuarioNombre;

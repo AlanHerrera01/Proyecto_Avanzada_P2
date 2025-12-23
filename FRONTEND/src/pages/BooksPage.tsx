@@ -25,6 +25,7 @@ export const BooksPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const systemMetrics = useSystemMetrics();
   const { publishBookEvent, publishSystemEvent } = useEventPublisher();
+  const [realTimeUpdates, setRealTimeUpdates] = useState(true);
 
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,25 +58,29 @@ export const BooksPage: React.FC = () => {
   });
 
   const loadBooks = React.useCallback(() => {
-  setLoading(true);
-  publishSystemEvent('Cargando libros', 'info');
+    setLoading(true);
+    publishSystemEvent("Iniciando carga de libros", "info");
 
-  reactiveApi.getBooksReactive().subscribe({
-    next: (data) => {
-      setBooks(data as Book[]);
-      publishSystemEvent(
-        `Libros cargados: ${(data as Book[]).length}`,
-        'info'
-      );
-    },
-    error: (err) => {
-      setError(err.message ?? 'Error cargando libros');
-    },
-    complete: () => {
-      setLoading(false);
-    }
-  });
-}, [publishSystemEvent]);
+    reactiveApi.getBooksReactive().subscribe({
+      next: (data) => {
+        const booksData = data as Book[];
+        setBooks(booksData);
+        setError(null);
+        publishSystemEvent(
+            `Libros cargados: ${booksData.length}`,
+            "info",
+            { count: booksData.length }
+        );
+      },
+      error: (err) => {
+        const msg = err instanceof Error ? err.message : "Error cargando libros";
+        setError(msg);
+        publishSystemEvent("Error cargando libros", "error", { error: msg });
+      },
+      complete: () => setLoading(false),
+    });
+  }, [publishSystemEvent]);
+
 
 
 
@@ -88,28 +93,61 @@ export const BooksPage: React.FC = () => {
     }
   };
 
-  const onSubmit = (data: BookFormData) => {
-  setLoading(true);
+  const onSubmit = async (data: BookFormData) => {
+    try {
+      setLoading(true);
 
-  const observable = editingBook
-    ? reactiveApi.updateBookReactive(editingBook.id, data)
-    : reactiveApi.createBookReactive(data);
+      if (editingBook) {
+        publishSystemEvent("Iniciando actualización de libro", "info", {
+          bookId: editingBook.id,
+        });
 
-  observable.subscribe({
-    next: () => {
-      setSuccess(
-        editingBook ? 'Libro actualizado correctamente' : 'Libro creado correctamente'
-      );
-    },
-    error: (err) => {
-      setError(err.message ?? 'Error guardando libro');
-    },
-    complete: () => {
+        reactiveApi.updateBookReactive(editingBook.id, data).subscribe({
+          next: (book) => {
+            const updated = book as Book;
+            setSuccess("Libro actualizado correctamente");
+            publishBookEvent("BOOK_UPDATED", { bookId: updated.id });
+          },
+          error: (err) => {
+            const msg = err instanceof Error ? err.message : "Error al actualizar libro";
+            setError(msg);
+            publishSystemEvent("Error actualizando libro", "error", { error: msg });
+          },
+          complete: () => {
+            setLoading(false);
+            handleCloseModal();
+            if (!realTimeUpdates) loadBooks();
+          },
+        });
+
+      } else {
+        publishSystemEvent("Iniciando creación de libro", "info");
+
+        reactiveApi.createBookReactive(data).subscribe({
+          next: (book) => {
+            const created = book as Book;
+            setSuccess("Libro creado correctamente");
+            publishBookEvent("BOOK_CREATED", { bookId: created.id });
+          },
+          error: (err) => {
+            const msg = err instanceof Error ? err.message : "Error al crear libro";
+            setError(msg);
+            publishSystemEvent("Error creando libro", "error", { error: msg });
+          },
+          complete: () => {
+            setLoading(false);
+            handleCloseModal();
+            if (!realTimeUpdates) loadBooks();
+          },
+        });
+      }
+    } catch (err: unknown) {
+      const e = err instanceof Error ? err : new Error("Error desconocido");
+      setError(e.message);
       setLoading(false);
-      handleCloseModal();
     }
-  });
-};
+  };
+
 
 
   const handleDelete = (id: number) => {
@@ -117,10 +155,11 @@ export const BooksPage: React.FC = () => {
 
   setLoading(true);
 
-  reactiveApi.deleteBookReactive(id).subscribe({
-    next: () => {
-      setSuccess('Libro eliminado correctamente');
-    },
+    reactiveApi.deleteBookReactive(id).subscribe({
+      next: () => {
+        setSuccess('Libro eliminado correctamente');
+        publishBookEvent('BOOK_DELETED', { bookId: id });
+      },
     error: (err) => {
       setError(err.message ?? 'Error eliminando libro');
     },
